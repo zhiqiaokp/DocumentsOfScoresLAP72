@@ -1,0 +1,1179 @@
+
+
+
+
+
+LAPS2 72 Replicator pseudocode
+
+Program Documentation / User Guide
+
+Create at July 2018
+
+Division of Research, Kaiser Permanente
+Strategic Programming Group, NCAL
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Version1.0Release DateJuly 2018Project teams:
+  Gabriel J Escobar team
+  Jamila Gul SPG Team
+Developers & Consultants:
+Gabriel J Escobar 
+John D Greene
+Lauren Soltesz
+Brian Lawson
+Jamila Gul
+Daniel NG
+Zhi Qiao
+Wei Tao
+….Approved by            Gabriel J Escobar 
+Jamila Gul
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Table of Contents
+
+
+1.	OVER ALL	2
+2.	EDIP EARLY WARNING SYSYTEM	2
+2.1	PART 0  AAP DATA	2
+	STEPS:
+              Steps 0.1 APP data…………………………………………………………………………………………………………	………..2
+              Steps 0.2 Refer APP data …………………………………………………………………………………………………	……..2
+2.2	PART 1  CREATE ALERT TIME SYSTEM	3
+	STEPS:
+              Steps 1.0 EDIP APP……………………………………………………………………………………………………	……………..3
+              Steps 1.1 Temp…………………………………………………………………………………………………………	……………..3
+              Steps 1.2 Alert time …………………………………………………………………………………………………	……………..3
+              Steps 1.2.1 Alert0..……………………………………………………………………………………………………	……………..3
+              Steps 1.2.2 Alert_time……………………………………………………………………………………………	………………..3
+              Steps 1.2.4 Case value setting up…………………………………………………………………………………	………………..5
+2.3	PART 2 CREATE LAPS SCORE 	5
+	STEPS:
+              Steps 2.0.1 MYMRNs  ………………………………………………………………………………………	……………………..5
+              …………………………………………………………………………………………………………………………	…………..?
+              ……………………………………………………………………………………………………………………	………………..?
+              Steps 6.4.0 Fin datas   …………………………………………………………………………………	…………………………42
+3.	APPENDIX	42
+        APPENDIX A (FACILTY LIST 1 MAPPING)	42
+        APPENDIX B (FACILTY LIST 2 MAPPING)	42
+..………………………………………………………………………………………………………….……………	……………….43
+        APPENDIX K (FIN DATA COLUMNS)	64
+4.	GLOSSARY	64
+
+
+1. Over all
+     This document describes the SAS ETL processes of LAPS2 score for 72 hours look back window from EDIP date time. This program is replicate Epic AAM LAPS2 Code and evaluate LAPS2 for AAM Early Warning System.
+     The document includes each episode’s location, input / output datasets name, purpose and process business logic, also includes macro format and metadata mapping tables in appendix.  The episode location can be mapped and found in its SAS program and program data flow file accordingly.
+
+2. Program description in each steps and dataset
+     This program starts input the EPIC data loading time range – from ‘Param_Start_Date’ to ‘Param_End_Date’ and final output replicated LAPS2 score table “SAS.LAPS2_72_EPIC”. 
+STEPS:
+
+2.1.  Input loading time window parameters
+       DESCRIPTION:
+       This area request user edit the date time before run this program.
+       
+INPUT:
+		Edit macro variable ‘Param_Start_Date’ and ‘Param_End_Date’ for start.
+
+2.2.  RDI data
+DESCRIPTION:
+* Load EPIC data from clarity tables with scores created date time within upper input date time windows.
+* Need more biz logic information, such as what’s number 40700, 40600 indication, and why condition ACUITY_SYSTEM_NAME be selected.  Any mapping table need feed in?	
+INPUT:
+Macro variables ‘Param_Start_Date’ and ‘Param_End_Date’
+ACUITY_SCORE_SPECIFIC 
+INNER JOIN QM_GEN_INFO INNER JOIN ACUITY_CONFIG
+INNER JOIN RDI_PAT_CSN 
+INNER JOIN PAT_ENC_HSP
+INNER JOIN ACUITY_RULE_SCORE
+INNER JOIN CL_CHRG_EDIT_RULE
+INNER JOIN PATIENT
+ where Param_Start_Date <=SCORE_FILE_LOC_DTTM <= Param_End_Date
+	and (ACUITY_SYSTEM_NAME = 'LABORATORY-BASED ACUTE PHYSIOLOGY SCORE (LAPS2 72HR)'
+        or ACUITY_SYSTEM_NAME = 'LABORATORY-BASED ACUTE PHYSIOLOGY PRESCORE (LAPS2) BREAKOUT')
+OUTPUT:
+		RDI
+
+2.2.1.  QA / CHECKING – RDI
+QA TABLES:
+* COHORT
+* COHORT2
+* COHORT3
+* LAPS2_72
+* CHECK
+* REGISTRY_DATA_IDS_QA
+* ZEROES
+* ZEROES_BY_ALERT
+
+2.2.2. PREVIEW QA / CHECKING – REGISTRY ID and SCORE COMPONENTS
+            QA TABLES:
+* REGISTRY_DATA_IDS
+* SCORE_COMPONENTS
+* CHECK
+* SAS. SCORE_72_COMPONENTS  - physical saved table ‘SCORE_COMPONENTS’, not be used in later program.
+
+Start Main Process:
+2.3.  LAPS2_72 data 
+DESCRIPTION:
+* Load LAPS2 72 hour Cohort table from RDI table. 
+* WHERE Score_Name_40300='LABORATORY-BASED ACUTE PHYSIOLOGY SCORE (LAPS2 72HR)'
+* PAT_ENC_CSN_ID level
+INPUT:
+       RDI
+OUTPUT:
+		LAPS2_72
+
+2.4.  HCCLNC_USHARE.&HCUSER.AAM
+DESCRIPTION:
+* Upload distinct PAT_ENC_CSN_ID from table ‘LAPS2_72’ to clarity shared driver in order to be joined with clarity tables.
+INPUT:
+       LAPS2_72
+OUTPUT:
+		US.&HCUSER.AAM
+
+2.5.  DOB_SEX_DOD
+DESCRIPTION:
+* Load patient's demographics information - gender, age, birth/death date from clarity tables.
+* PAT_ENC_CSN_ID level
+INPUT:
+       LAPS2_72  (US.&HCUSER.AAM) 
+       Inner join CLARITY_ADT
+       Left join PATIENT
+       
+OUTPUT:
+		DOB_SEX_DOD
+
+2.6.  LABVITAL72_COHORT and SAS.RDI_72_LAPS2_COHORT
+DESCRIPTION:
+* Create table ‘LABVITAL72_COHORT’ and SAS.RDI_72_LAPS2_COHORT, which 
+o ‘LABVITAL72_COHORT’  - will be used to load LABS and VITAL components.
+o  ‘SAS.RDI_72_LAPS2_COHORT’ - will be joined to create input table of LAPS2 score. 
+* Table ‘LABVITAL72_COHORT’ and  ‘SAS.RDI_72_LAPS2_COHORT’ are same data.
+* These 2 tables created by joined demographics information - DOB_SEX_DOD with laps2_72 table
+* Create variable LAPS2_TS from variable ‘Score_Time_40700’
+* PAT_ENC_CSN_ID level
+INPUT:
+       DOB_SEX_DOD
+       laps2_72
+       Merged by PAT_ENC_CSN_ID
+OUTPUT:
+		LABVITAL72_COHORT 
+		SAS.RDI_72_LAPS2_COHORT
+
+
+2.7.  ED_FLAG (Create ED flag and make linked episodes)
+DESCRIPTION:
+* Create each episode time per PAT_ENC_CSN_ID level
+* Make linked encounters within 8 hour windows
+* Flag ED information and ED FLAG based on first stay per episode
+
+2.7.1.  COHORT2
+       DESCRIPTION: 
+* Create each episode time per PAT_ENC_CSN_ID level	
+* Create INDEX_TS from HOSP_ADMSN_TIME
+       INPUT:
+SAS.RDI_72_LAPS2_COHORT
+INNER JOIN PAT_ENC_HSP
+LEFT JOIN PATIENT
+     OUTPUT:
+      COHORT2
+     
+2.7.2. STAYS
+       DESCRIPTION: 
+* Find each episode stay information, such as hospital administration time, discharge time, discharge code, ED episode id .. per encounter level.
+       INPUT:
+COHORT2
+INNER JOIN PAT_ENC_HSP
+(Inner joined by PAT_ID)
+Where HOSP_ADMSN_TIME IS NOT NULL
+     OUTPUT:
+      STAYS
+     
+2.7.3. LINKED
+       DESCRIPTION: 
+* Make linked encounters within 8 hour windows:
+* Pad_id level.
+* Linked condition:
+o If previous HOSP_DISCH_TIME and next HOSP_ADMSN_TIME within 8 hours 
+and previous HOSP_DISCH_TIME status not in 
+      ('121508'
+      ,'12110'	
+,'121503'         
+,'121508'
+,'121509'         
+,'121511'         
+,'121522'         
+,'121523'         
+,'121524'         
+,'121525'         
+,'121526'         
+,'121527'         
+,'1216'           
+,'1217'           
+,'1218')    - Mapping information, please see (Appendix Discharge Code)
+* Flag number into variable ‘prelim_episode’, if linked then prelim_episode =1 else prelim_episode = prelim_episode +1
+       INPUT:
+STAYS
+ (BY PAT_ID HOSP_ADMSN_TIME HOSP_DISCH_TIME)  
+     OUTPUT:
+      LINKED
+      
+2.7.4. EPISODES
+       DESCRIPTION: 
+* Create episodes and linked encounters.
+* ED_FLAG based first stay per episode, value from variable ED_EPISODE_ID.
+* If linked, assign orig_adm_date_time  from earliest HOSP_ADMSN_TIME per PAT_ID.
+       INPUT:
+LINKED
+ (by PAT_ID prelim_episode)
+     OUTPUT:
+      EPISODES
+      
+2.7.5. ED_FLAG
+       DESCRIPTION: 
+* Create ED FLAG	by joined EPISODES back with COHORT2 table
+* Join by PAT_ID and each episode time range start from orig_adm_date_time to hosp_disch_time.  
+       INPUT:
+COHORT2
+      EPISODES
+      (by PAT_ID, and INDEX_TS BETWEEN orig_adm_date_time AND HOSP_DISCH_TIME)
+     OUTPUT:
+  ED_FLAG
+  
+2.8.  LAPS (Load LAPS components data within 72 hours back time windows)
+2.8.1. LAB_LOOKUP
+       DESCRIPTION: 
+* Set up COMPONENT look up table.  
+       INPUT:
+      Hard coding, COMPONENT_ID and ETYPE_CD mapping table (Appendix Lab lookup)
+     OUTPUT:
+  LAB_LOOKUP
+  
+2.8.2. LAB
+       DESCRIPTION: 
+* Load LAB COMPONENTs from Clarity order tables with finding LAB results from 72 hour back of LAB start datetime (where SPECIMN_TAKEN_TIME or LAST_RESULT_UPD_TM within time range between in (EDIP Start time -72 hours) and EDIP Start) and select component code pool from LAB_LOOKUP table.  
+* The LAB results loaded based on MRN level. 
+       INPUT:
+       LABVITAL72_COHORT
+      Inner join PATIENT
+      Inner join ORDER_PROC
+      Inner join ORDER_RESULTS
+      Inner join ORDER_PROC_2
+      Inner join CLARITY_COMPONENT 
+      Inner join LAB_LOOKUP
+      Where START_TS <= LAST_RESULT_UPD_TM STOP_TS 
+      AND START_TS <= SPECIMN_TAKEN_TIME < STOP_TS
+     OUTPUT:
+  LAB
+  
+2.8.3. ALL_LABS0
+       DESCRIPTION: 
+* Clean up resulting values. 
+* Clean up some miscellaneous values of MEAS_VALUE variable
+* Create EVALUE from cleaned MEAS_VALUE
+* Assigned ETIME_TS value from LAST_RESULT_UPD_TM or RESULT_TIME.
+
+       INPUT:
+  LAB
+      
+     OUTPUT:
+  ALL_LABS0
+
+2.9.  VITALS (Load VITALS components data within 72 hours back time windows)
+2.9.1. VITALS1
+       DESCRIPTION: 
+* Loading all components from 72 hours back of VITALS datetime
+      Load VITAL COMPONENTs from Clarity flowsheet tables with ENTRY_TIME or RECORDED_TIME within time range between in (EDIP Start time -72 hours) and EDIP Start time (Looking VITAL results from 72 hour back of  VITALS datetime) and select component code pool from FLO_MEAS_ID IN ('9005', '9008', '1216177', '9009', '90010', '9006')
+* The VITAL results loaded based on PAT_ENC_CSN_ID level. 
+
+       INPUT:
+      LABVITAL72_COHORT
+      Inner join PAT_ENC_HSP
+      Inner join IP_FLWSHT_REC
+      Inner join IP_FLWSHT_MEAS
+      Where FLO_MEAS_ID IN ('9005', '9008', '1216177', '9009', '90010', '9006') 
+      And (START_TS<= ENTRY_TIME  <STOP_TS 
+              or  START_TS<= RECORDED_TIME <STOP_TS)
+     OUTPUT:
+  VITALS1
+  
+2.9.2. VITALS2
+       DESCRIPTION: 
+* Process vitals START
+* Assign EVALUE and ETYPE_CD values based on FLO_MEAS_ID codes. Mapping table please see (Appendix Vital meas id)
+* If IF EVALUE~=. Then output to VITALS2 table.
+
+       INPUT:
+       VITALS1
+     OUTPUT:
+  VITALS2
+  
+2.10. NEURO (Load NEURO components data within 72 hours back time windows)
+2.10.1. NEURO1
+       DESCRIPTION: 
+* Loading all components from 72 hours back of NEURO datetime
+      Load NEURO COMPONENTs from Clarity flowsheet tables with ENTRY_TIME or RECORDED_TIME within time range between in (EDIP Start time -72 hours) and EDIP Start time (Looking NEURO results from 72 hour back of  NEURO datetime) and select component code pool from FLO_MEAS_ID IN ('12115646', '1211681', '1211146', '1217373', '1211148', '1212270', '1217293', '1211149')  
+* The NEURO results loaded based on MRN level. 
+
+       INPUT:
+      LABVITAL72_COHORT
+      Inner join PATIENT
+      Inner join PAT_ENC_HSP
+      Inner join IP_FLWSHT_REC
+      Inner join IP_FLWSHT_MEAS
+      Where FLO_MEAS_ID IN ('12115646', '1211681', '1211146', '1217373', '1211148', '1212270', '1217293', '1211149') 
+      And (START_TS<= ENTRY_TIME  <STOP_TS 
+              or  START_TS<= RECORDED_TIME <STOP_TS)
+     OUTPUT:
+  NEURO1
+  
+2.10.2. NEURO2
+       DESCRIPTION: 
+* Process NEURO data
+* Assign calculation score variables based on FLO_MEAS_ID and MEAS_VALUE codes.  The score assigned logic please see (Appendix NEURO Calculation table)
+* Score variables are:
+o  _694660
+o _694662_1
+o _694662_2
+o _694664
+o _694665
+o _694666
+o _695160
+o _695161
+o _695162
+o _695163
+o _695164
+o _695165
+o _695166
+o _695167
+o _695168
+o _695169
+o _695170
+o _694663
+o _695151
+o _695153
+o _695154
+o _695155
+o _695156
+o _695157
+o _695158
+o _695159
+o _695171 =MAX(_694660,_695170,_694662,_695159,_694664,_694665,_694666), this is score variable to be selected and assigned to NEURO’s EVALUE per MRN.
+       
+       INPUT:
+       NEURO1 
+     OUTPUT:
+  NEURO2
+  
+2.10.3. ONE_ROW_EPIC_NEURO
+       DESCRIPTION: 
+* Finding Max value of _695171 per MRN10_NB and EDIP_TS1	
+       
+       INPUT:
+       NEURO2
+     OUTPUT:
+  ONE_ROW_EPIC_NEURO
+  
+2.10.4. ONE_ROW_EPIC_NEURO2
+       DESCRIPTION: 
+* Finding Max value of _695171 per MRN10_NB and EDIP_TS1
+       
+       INPUT:
+       ONE_ROW_EPIC_NEURO
+       Join back with LABVITAL72_COHORT
+     OUTPUT:
+  ONE_ROW_EPIC_NEURO2
+  
+2.11. LABS and VITALS Merged process and prepare input data of calculating the LPAS2 scores.
+2.11.1. FOR_LAPS2
+       DESCRIPTION: 
+* Set LABS, VITALS, and NEURO datasets together to prepare the input data for calculating the LAPS2 score. 
+* With PAT_ENC_CSN_ID level detail.
+* Assigned ETYPE_CD = ‘NEURO’
+* Assinged EVALUE = _695171
+* Clean up little bit values of variable EVALUE and ETYPE_CD.
+       
+       INPUT:
+       ONE_ROW_EPIC_NEURO2
+       Join back with LABVITAL72_COHORT
+       VITALS2
+     OUTPUT:
+  ONE_ROW_EPIC_NEURO2
+  
+2.11.2. LAPS2_COHORT
+       DESCRIPTION: 
+* Load Cohort data set from saved cohort table SAS.RDI_72_LAPS2_COHORT
+* PAT_ENC_CSN_ID, LAPS2_TS level	
+
+       INPUT:
+       SAS.RDI_72_LAPS2_COHORT
+     OUTPUT:
+  LAPS2_COHORT
+  
+2.11.3. FOR_LAPS2_ALL
+       DESCRIPTION: 
+* Merged LABS and VITAL data back with Cohort data
+* PAT_ENC_CSN_ID level	
+
+       INPUT:
+       LAPS2_COHORT
+       LEFT JOIN FOR_LAPS2
+       LEFT JOIN ED_FLAG
+     OUTPUT:
+  FOR_LAPS2_ALL
+  
+2.11.4. FOR_LAPS2_ALL2 and  SAS.DOR_72_CHOICES
+       DESCRIPTION: 
+* Create input table of calculating laps2 score -FOR_LAPS2_ALL2
+* And back up input table to SAS.DOR_72_CHOICES
+* Assigned MALE variable based on SEX_C
+* Assigned AGE variable based on ORIG_ADM_DATE_TIME and BIRTH_DATE
+* PAT_ENC_CSN_ID level	
+
+       INPUT:
+       FOR_LAPS2_ALL
+     OUTPUT:
+  FOR_LAPS2_ALL2 
+  SAS.DOR_72_CHOICES
+2.12. Start process LAPS2 Score calculation
+       DESCRIPTION: 
+* Bring in LAPS2 Score calculation macro %EPIC_LAPS2_POST_DATA_COLLECTION
+* Key variable is PAT_ENC_CSN_ID, LAPS2_TS	
+
+       INPUT:
+       Macro - %include "&sun/SRIData/MACROS/LAPS2_POST_DATA_COLLECTION_EPIC_2018_0109.sas";
+       FOR_LAPS2_ALL2
+     OUTPUT:
+  SAS.LAPS2_72_EPIC
+2.12.1. %EPIC_LAPS2_POST_DATA_COLLECTION
+       DESCRIPTION: 
+* This macro is made to create a LAPS2 score at any timeframe. It assumes that you have already pulled your data in for the appropriate timeframe and you already have it formatted as described below. This means this macro can be used with any data source, but your score will only be as valid as the data you feed it.	
+* Calculation mapping table please see (Appendix LAPS2 Score Calculation)
+
+       INPUT: 
+              	KEY 		- Must be one variable, that when coupled with LAPS2_TS are the key (i.e. PAT_ENC_CSN_ID)
+     	INDATA		- Input dataset name
+     	OUTDATA	- Output dataset name (can be the same as INDATA)
+     	COMP		- 0/1 indicator for if you want the score components
+     
+       NEEDED COLUMNS FOR INDATA:
+     	KEY 		- Whatever key variable you listed above
+     	ED 			- 0/1 indicator for ED stay
+     	AGE			- Age at laps2_ts
+     	MALE		- 0/1 indicator for male
+     	LAPS2_TS	- Timestamp for your LAPS2 (this along with your key should be the combo you will get a score at)
+     	ETYPE_CD 	- Type of lab/vital/neuro sign (all names have an o in them, not a zero)
+     			01. BUN
+     			02. CREAT
+     			03. SODIUM
+     			04. ANIONGAP
+     			05. BICARB
+     			06. PH
+     			07. LACT
+     			08. BILI
+     			09. ALBUMIN
+     			10. GLUCOSE
+     			11. HEMAT
+     			12. WBC
+     			13. PACO2
+     			14. PAO2
+     			15. TROP
+     			16. TEMP
+     			17. HRTRT
+     			18. RESP
+     			19. BPSYS
+     			20. O2SAT (0 to 100 scale)
+     			21. NEURO (1,2,3,4 as in normal, ambiguous, abnormal, very abnormal)
+     	ETIME_TS	- Timestamp for your lab/vital/neuro sign
+     	EVALUE		- Numeric value for that timestamp
+     OUTPUT:
+  OUTDATA - SAS.LAPS2_72_EPIC
+
+2.13. 
+3. Appendix
+
+Discharge code (back):
+
+DISCH_DISP_CNAME1218SNF-Home Hospice1217SNF-Hospice Facility1216Eloped121527SN/IC - D/T to SNF with Medicare Certification121526SN/IC - D/T to an Intermediate Care Facility (ICF)121525SN/IC - D/T to a Nursing Facility Certified under Medicaid but not Certified under Me121524SN/IC - D/T to a Medicare Certified Long Term Care Hosp (LTCH)121523RESIDENTIAL CARE - Discharge to Home or Self Care (Routine Discharge)121522PRISON/JAIL - Discharge to Home or Self Care (Routine Discharge)121511HOME HEALTH SERVICES - Discharge to Home Hospice121509HOME HEALTH SERVICE - D/T to Home Under Care of Organized Home Health Service Organiz121508HOME - Discharge to Home or Self Care (Routine Discharge)121503AGAINST MEDICAL ADVICE - Left Against Medical Advice or Discontinued Care12110Prison/Jail-Discharge/Transfer to Court/Law Enforcement
+
+LAB COMPONENT_ID lookup table (back):
+
+COMPONENT_IDETYPE_CD12077ALBUMIN12116019, 12124265ANIONGAP120774, 12117066,12124280,12124281,12124295BICARB120418,120420,120421BILI120484,12123875BUN120896,12124266CREAT1201382,1201418,12124264GLUCOSE1201478,1201479,12123886HEMAT1201812,12124269,12124270,12124271LACT120775,12124275,12124290,12124293,12124299PACO21202281,12013058,12124277,12124291,12124294,12124301PAO21202352,12126029,12124273,12124279,12124289PH1202829, 12123879SODIUM1203171, 12124272TROP1201875, 1201876WBC
+
+
+Vital Flowsheet measurement IDs (back):
+
+FLO_MEAS_IDETYPE_CDEVALUEDescription9005BPDIANumber on the left side of “/” in MEAS_VALUEDiastolic Blood PressureBPSYSNumber on the right side of “/” in MEAS_VALUESystolic Blood Pressure9008HRTRTNot null MEAS_VALUE*1Heart Rate (Pulse Rate)1216177HRTRTNot null MEAS_VALUE*19009RSPRTNot null MEAS_VALUERespiratory Rate90010O2SATNot null MEAS_VALUE*1
+If MEAS_VALUE <= 1 then MEAS_VALUE*100Oxygen Saturation9006TEMPNot null MEAS_VALUE*1Temperature
+
+NEURO Calculation table (back):
+ETYPE_CDName of Score variableDescription of Score variableFLO_MEAS_ID
+(input)MEAS_VALUE
+(input)Score names
+(input)Code for score assignmentValues of Score variableNEURO_694660Patient Score Rules - LAPS2 SOURCE Neuro Glasgow Score 24HR1211146, 121168114', '15'
+'8', '9', '10', '11', '12', '13'
+'3', '4', '5', '6', '7' 
+IF FLO_MEAS_ID IN ('12115646', '1211681') THEN DO;
+   IF VARIABLEVALUE IN ('14', '15') THEN _694660=1;
+   ELSE IF VARIABLEVALUE IN ('8', '9', '10', '11', '12', '13') THEN _694660=3;
+   ELSE IF VARIABLEVALUE IN ('3', '4', '5', '6', '7') THEN _694660=4;
+END;1- if list  of Flowsheet Values (Glasgow, 24) == 14, 15           
+3- if list of Flowsheet Values (Glasgow, 24) == 8, 9, 10, 11, 12, 13  
+4 OR RESULT - if list of Flowsheet Values (Glasgow, 24) == 3, 4, 5, 6, 7_694662Patient Score Rules - LAPS2 SOURCE Neuro Mental Status 24HR1217373AGITATED     
+ANGRY        
+ANXIOUS      
+CONFUSED     
+COOPERATIVE  
+CRYING       
+FLAT         
+RELAXED      
+UNCOOPERATIVE IF FLO_MEAS_ID='1217373' THEN DO;
+   AGITATED=0;
+   ANGRY=0;
+   ANXIOUS=0;
+   CONFUSED1=0;
+   COOPERATIVE=0;
+   CRYING=0;
+   FLAT=0;
+   RELAXED=0;
+   UNCOOPERATIVE=0;
+
+   IF INDEX(VARIABLEVALUE,"AGITATED")>0 THEN AGITATED=1;
+   IF INDEX(VARIABLEVALUE,"ANGRY")>0 THEN ANGRY=1;
+   IF INDEX(VARIABLEVALUE,"ANXIOUS")>0 THEN ANXIOUS=1;
+   IF INDEX(VARIABLEVALUE,"CONFUSED")>0 THEN CONFUSED1=1;
+   IF INDEX(VARIABLEVALUE,"COOPERATIVE")>0 AND INDEX(VARIABLEVALUE,"UNCOOPERATIVE")=0 THEN COOPERATIVE=1;
+   IF INDEX(VARIABLEVALUE,"CRYING")>0 THEN CRYING=1;
+   IF INDEX(VARIABLEVALUE,"FLAT")>0 THEN FLAT=1;
+   IF INDEX(VARIABLEVALUE,"RELAXED")>0 THEN RELAXED=1;
+   IF INDEX(VARIABLEVALUE,"UNCOOPERATIVE")>0 THEN UNCOOPERATIVE=1;
+
+   _694662_1=0;
+   _694662_2=0;
+   IF RELAXED OR COOPERATIVE OR CRYING THEN _694662_1=1;
+   IF AGITATED OR ANGRY OR ANXIOUS OR CONFUSED1 OR FLAT OR UNCOOPERATIVE THEN _694662_2=3;
+   _694662=ABS(_694662_2-_694662_1);
+   IF _694662=0 THEN _694662=2;
+END;1 - if list of Flowsheet Values (Mental Status, 24) Contains Any RELAXED, COOPERATIVE, CRYING 1 AND abs(s2-s1)
+2 - if list of Flowsheet Values (Mental Status, 24) Contains Any AGITATED, ANGRY, ANXIOUS, CONFUSED, FLAT, UNCOOPERATIVE 3        _694664Patient Score Rules - LAPS2 SOURCE Neuro Pupils 24HR
+        1212270NO, ADD COMPLEX
+UNABLE TO ASSESS
+YES IF FLO_MEAS_ID='1212270' THEN DO;
+
+   NO=0;
+   UNABLE2=0;
+   YES=0;
+
+   IF INDEX(VARIABLEVALUE,"NO, ADD COMPLEX")>0 THEN NO=1;
+   IF INDEX(VARIABLEVALUE,"UNABLE TO ASSESS")>0 THEN UNABLE2=1;
+   IF INDEX(VARIABLEVALUE,"YES")>0 THEN YES=1;
+
+   IF YES THEN _694664=1;
+   ELSE IF UNABLE2 THEN _694664=2;
+   ELSE IF NO THEN _694664=4;
+
+END;1 - if List of Flowsheet Values (Pupils, 24) Contains Any YES     
+2 - if List of Flowsheet Values (Pupils, 24) Contains Any UNABLE TO ASSESS 
+4 - if List of Flowsheet Values (Pupils, 24) Contains Any NO _694665Patient Score Rules - LAPS2 SOURCE Schmid Fall Risk 24HR
+        1217293ALERT
+COMATOSE
+CONFUSED
+PERIODIC IF FLO_MEAS_ID='1217293' THEN DO;
+
+   ALERT=0;
+   COMATOSE2=0;
+   CONFUSED3=0;
+   PERIODIC=0;
+
+   IF INDEX(VARIABLEVALUE,"ALERT")>0 THEN ALERT=1;
+   IF INDEX(VARIABLEVALUE,"COMATOSE")>0 THEN COMATOSE2=1;
+   IF INDEX(VARIABLEVALUE,"CONFUSED")>0 THEN CONFUSED3=1;
+   IF INDEX(VARIABLEVALUE,"PERIODIC")>0 THEN PERIODIC=1;
+
+   IF PERIODIC THEN _694665=3;
+   ELSE IF COMATOSE2 OR CONFUSED3 THEN _694665=4;
+   ELSE IF ALERT THEN _694665=1;
+
+END;1 - if list of Flowsheet Values (Schmid, 24) Contains Any ALERT   
+3 OR RESULT - if list of Flowsheet Values (Schmid, 24) Contains Any PERIODIC 
+4 - if list of Flowsheet Values (Schmid, 24) Contains Any COMATOSE, CONFUSED _694666Patient Score Rules - LAPS2 SOURCE Speech 24HR
+        1211149ARTIFICIAL
+CLEAR 
+DYSARTHIA
+DYSPHONIA
+EXPRESSIVE
+HOARSE 
+MONOSYLLABIC
+NO VERBAL
+RAMBLING 
+RECEPTIVE
+SLURRED 
+SPONTANEOUS
+UNABLE  IF FLO_MEAS_ID='1211149' THEN DO;
+
+   ARTIFICIAL=0;
+   CLEAR=0;
+   DYSARTHIA=0;
+   DYSPHONIA=0;
+   EXPRESSIVE=0;
+   HOARSE=0;
+   MONOSYLLABIC=0;
+   NONE=0;
+   RAMBLING=0;
+   RECEPTIVE=0;
+   SLURRED=0;
+   SPONTANEOUS=0;
+   UNABLE3=0;
+
+   IF INDEX(VARIABLEVALUE,"ARTIFICIAL")>0 THEN ARTIFICIAL=1;
+   IF INDEX(VARIABLEVALUE,"CLEAR")>0 THEN CLEAR=1;
+   IF INDEX(VARIABLEVALUE,"DYSARTHIA")>0 THEN DYSARTHIA=1;
+   IF INDEX(VARIABLEVALUE,"DYSPHONIA")>0 THEN DYSPHONIA=1;
+   IF INDEX(VARIABLEVALUE,"EXPRESSIVE")>0 THEN EXPRESSIVE=1;
+   IF INDEX(VARIABLEVALUE,"HOARSE")>0 THEN HOARSE=1;
+   IF INDEX(VARIABLEVALUE,"MONOSYLLABIC")>0 THEN MONOSYLLABIC=1;
+   IF INDEX(VARIABLEVALUE,"NO VERBAL")>0 THEN NONE=1;
+   IF INDEX(VARIABLEVALUE,"RAMBLING")>0 THEN RAMBLING=1;
+   IF INDEX(VARIABLEVALUE,"RECEPTIVE")>0 THEN RECEPTIVE=1;
+   IF INDEX(VARIABLEVALUE,"SLURRED")>0 THEN SLURRED=1;
+   IF INDEX(VARIABLEVALUE,"SPONTANEOUS")>0 THEN SPONTANEOUS=1;
+   IF INDEX(VARIABLEVALUE,"UNABLE")>0 THEN UNABLE3=1;
+
+   IF CLEAR OR SPONTANEOUS THEN _694666=1;
+   ELSE IF DYSARTHIA OR DYSPHONIA OR EXPRESSIVE OR MONOSYLLABIC OR NONE OR RAMBLING OR RECEPTIVE OR SLURRED THEN _694666=3;
+   ELSE IF ARTIFICIAL THEN _694666=1;
+   ELSE IF HOARSE THEN _694666=1;
+
+END;1 OR RESULT  - if list of Flowsheet Values (Speech, 24) Contains Any CLEAR, SPONTANEOUS 
+1  - if list of Flowsheet Values (Speech, 24) Contains Any ARTIFICIAL  
+1  - if list of Flowsheet Values (Speech, 24) == HOARSE   
+3  - if list of Flowsheet Values (Speech, 24) Contains Any DYSARTHIA, DYSPHONIA, EXPRESSIVE, MONOSYLLABIC, NO VERBAL, RAMBLING, RECEPTIVE, SLURRED_694661Patient Score Rules - LAPS2 SOURCE Neuro Consciousness NORMAL 24HR
+        1211146ALERT
+AWAKE
+FOLLOWS COMMANDS
+SLEEPING BUT AROUSABLE IF FLO_MEAS_ID='1211146' THEN DO;
+   
+   NORMAL=0;
+   
+   IF INDEX(VARIABLEVALUE,"ALERT")>0 THEN NORMAL=1;
+   IF INDEX(VARIABLEVALUE,"AWAKE")>0 THEN NORMAL=1;
+   IF INDEX(VARIABLEVALUE,"FOLLOWS COMMANDS")>0 THEN NORMAL=1;
+   IF INDEX(VARIABLEVALUE,"SLEEPING BUT AROUSABLE")>0 THEN NORMAL=1;
+
+   IF NORMAL=1 THEN _694661=1;
+
+END;1 OR RESULT  - list of Flowsheet Values (Consciousness, 24) Contains Any ALERT, AWAKE, FOLLOWS COMMANDS, SLEEPING BUT AROUSABLE_695160Patient Score Rules - LAPS2 SOURCE Neuro Consciousness GLASGOW 24HR
+        1211146FOR ADDITIONAL MONITORING IF FLO_MEAS_ID='1211146' THEN DO;
+   
+   GLASGOW=0;
+   
+   IF INDEX(VARIABLEVALUE,"FOR ADDITIONAL MONITORING")>0 THEN GLASGOW=1;
+
+   IF GLASGOW=1 THEN _695160=1;
+
+END;1 OR RESULT  - list of Flowsheet Values (Consciousness, 24) Contains Any FOR ADDITIONAL MONITORING_695161Patient Score Rules - LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR
+        1211146OBTUNDED IF FLO_MEAS_ID='1211146' THEN DO;
+   
+   OBTUNDED=0;
+   
+   IF INDEX(VARIABLEVALUE,"OBTUNDED")>0 THEN OBTUNDED=1;
+
+   IF OBTUNDED=1 THEN _695161=1;
+
+END;1 OR RESULT  - list of Flowsheet Values (Consciousness, 24) Contains Any OBTUNDED_695162Patient Score Rules - LAPS2 SOURCE Neuro Consciousness LETHARGIC 24HR1211146LETHARGIC IF FLO_MEAS_ID='1211146' THEN DO;
+   
+   LETHARGIC=0;
+   
+   IF INDEX(VARIABLEVALUE,"LETHARGIC")>0 THEN LETHARGIC=1;
+
+   IF LETHARGIC=1 THEN _695162=1;
+
+END;1 OR RESULT  - list of Flowsheet Values (Consciousness, 24) Contains Any LETHARGIC_695163Patient Score Rules - LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR
+        1211146COMATOSE
+STUPOROUS IF FLO_MEAS_ID='1211146' THEN DO;
+   
+   COMATOSE=0;
+   STUPOROUS=0;
+   
+   IF INDEX(VARIABLEVALUE,"COMATOSE")>0 THEN COMATOSE1=1;
+   IF INDEX(VARIABLEVALUE,"STUPOROUS")>0 THEN STUPOROUS=1;
+
+   IF COMATOSE1=1 OR STUPOROUS=1 THEN _695163=1;
+END;1 OR RESULT  - list of Flowsheet Values (Consciousness, 24) Contains Any COMATOSE, STUPOROUS_695164Patient LAPS2 Neuro Consciousness 24HR EVAL 1: Custom 1 and not (2 or 3 or 4 or 5)
+          _694661
+_695160
+_695161
+_695162
+_695163IF
+_694661  > 0 AND NOT (       
+_695160  > 0 OR              
+_695161  > 0 OR              
+_695162  > 0 OR              
+_695163  > 0) THEN _695164=1;1  - if 694661 Patient Score Rules LAPS2 SOURCE Neuro Consciousness NORMAL 24HR  AND NOT (                  
+695160 Patient Score Rules LAPS2 SOURCE Neuro Consciousness GLASGOW 24HR                  
+695161 Patient Score Rules LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR                 
+695162 Patient Score Rules LAPS2 SOURCE Neuro Consciousness LETHARGIC 24HR                
+695163 Patient Score Rules LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR    )_695165Patient LAPS2 Neuro Consciousness 24HR EVAL 2: Custom 2 and not (1 or 3 or 4 or 5)  _695160
+_694661
+_695161
+_695162
+_695163IF                          
+_695160 > 0 AND NOT (       
+_694661 > 0 OR              
+_695161 > 0 OR              
+_695162 > 0 OR              
+_695163 > 0) THEN _695165=1;1  - if 695160 Patient Score Rules LAPS2 SOURCE Neuro Consciousness GLASGOW 24HR   AND NOT (                  
+694661 Patient Score Rules LAPS2 SOURCE Neuro Consciousness NORMAL 24HR                
+695161 Patient Score Rules LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR                 
+695162 Patient Score Rules LAPS2 SOURCE Neuro Consciousness LETHARGIC 24HR                
+695163 Patient Score Rules LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR    )_695166Patient LAPS2 Neuro Consciousness 24HR EVAL 3: Custom 3 and not (1 or 2 or 4 or 5)  _695161
+_694661
+_695160
+_695162
+_695163IF                         
+_695161 > 0 AND NOT (      
+_694661 > 0 OR             
+_695160 > 0 OR             
+_695162 > 0 OR             
+_695163 > 0)THEN _695166=1;1  - if 695161 Patient Score Rules LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR  AND NOT (                  
+694661 Patient Score Rules LAPS2 SOURCE Neuro Consciousness NORMAL 24HR     
+695160 Patient Score Rules LAPS2 SOURCE Neuro Consciousness GLASGOW 24HR           
+695162 Patient Score Rules LAPS2 SOURCE Neuro Consciousness LETHARGIC 24HR                
+695163 Patient Score Rules LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR    )_695167Patient LAPS2 Neuro Consciousness 24HR EVAL 4: Custom 3 and not (1 or 2 or 4)  _695162
+_695160
+_695161
+_695163IF                        
+_695162 > 0 AND NOT (     
+_695160 > 0 OR            
+_695161 > 0 OR            
+_695163 > 0 HEN _695167=1;1  - if 695162 Patient Score Rules LAPS2 SOURCE Neuro Consciousness LETHARGIC 24HR  AND NOT (                  
+695160 Patient Score Rules LAPS2 SOURCE Neuro Consciousness GLASGOW 24HR           
+695161 Patient Score Rules LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR              
+695163 Patient Score Rules LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR    )_695168Patient LAPS2 Neuro Consciousness 24HR EVAL 5: Custom 5 and not (1 or 2 or 3 or 4)  _695163
+_694661
+_695160
+_695161
+_695162IF                         
+_695163 > 0 AND NOT (      
+_694661 > 0 OR             
+_695160 > 0 OR             
+_695161 > 0 OR             
+_695162 > 0)THEN _695168=1;1  - if 695163 Patient Score Rules LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR  AND NOT (                  
+694661 Patient Score Rules LAPS2 SOURCE Neuro Consciousness NORMAL 24HR     
+695160 Patient Score Rules LAPS2 SOURCE Neuro Consciousness GLASGOW 24HR           
+695161 Patient Score Rules LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR              
+695162 Patient Score Rules LAPS2 SOURCE Neuro Consciousness LETHARGIC 24HR  )_695169Patient LAPS2 Neuro Consciousness 24HR EVAL 6: Custom 1 and (2 or 3 or 4)  _694661
+_695160
+_695161
+_695163IF                          
+_694661 > 0 AND (           
+_695160 > 0 OR              
+_695161 > 0 OR              
+_695163 > 0) THEN _695169=1;1  - if 694661 Patient Score Rules LAPS2 SOURCE Neuro Consciousness NORMAL 24HR  AND NOT (                  
+695160 Patient Score Rules LAPS2 SOURCE Neuro Consciousness GLASGOW 24HR           
+695161 Patient Score Rules LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR              
+695163 Patient Score Rules LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR   )_695170Patient Score Rules - LAPS2 Neuro Consciousness 24HR EVAL FINAL  _695169
+_695168
+_695167
+_695166
+_695165
+_695164
+_695161
+_695163
+_695162IF _695169=1 THEN _695170=2;     
+ELSE IF _695168=1 THEN _695170=4;
+ELSE IF _695167=1 THEN _695170=3;
+ELSE IF _695166=1 THEN _695170=4;
+ELSE IF _695165=1 THEN _695170=2;
+ELSE IF _695164=1 THEN _695170=1;
+ELSE IF _695161=1 THEN _695170=4;
+ELSE IF _695163=1 THEN _695170=4;
+ELSE IF _695162=1 THEN _695170=3;2 OR RESULT - if LAPS2 Neuro Consciousness 24HR EVAL 6 == TRUE
+4 - else if LAPS2 Neuro Consciousness 24HR EVAL 5 == TRUE                 
+3 - else if LAPS2 Neuro Consciousness 24HR EVAL 4 == TRUE                 
+4 - else if LAPS2 Neuro Consciousness 24HR EVAL 3 == TRUE                 
+2 - else if LAPS2 Neuro Consciousness 24HR EVAL 2 == TRUE                 
+1 - else if LAPS2 Neuro Consciousness 24HR EVAL 1 == TRUE                 
+4 - else if LAPS2 SOURCE Neuro Consciousness OBTUNDED 24HR >0         
+4 - else if LAPS2 SOURCE Neuro Consciousness COMATOSE OR STUPOROUS 24HR > 0
+3 - else if LAPS2 SOURCE Neuro Consciousness LETHARGIC 24HR > 0  _694663Patient Score Rules - LAPS2 SOURCE Neuro Orientation EVENT+PERSON+PLACE+TIME 24HR1211148EVENT
+PERSON
+PLACE
+TIME IF FLO_MEAS_ID='1211148' THEN DO;
+   EVENT=0;
+   PERSON=0;
+   PLACE=0;
+   TIME=0;
+   IF INDEX(VARIABLEVALUE,"EVENT")>0 THEN EVENT=1;
+   IF INDEX(VARIABLEVALUE,"PERSON")>0 THEN PERSON=1;
+   IF INDEX(VARIABLEVALUE,"PLACE")>0 THEN PLACE=1;
+   IF INDEX(VARIABLEVALUE,"TIME")>0 THEN TIME=1;
+
+   _694663=SUM(EVENT,PERSON,PLACE,TIME);
+END;0/1/2/3/4 - sum(EVENT,PERSON,PLACE,TIME)
+
+SUM of (List of Flowsheet Values (Orientation, 24) Contains Any EVENT 
+List of Flowsheet Values (Orientation, 24) Contains Any PERSON 
+List of Flowsheet Values (Orientation, 24) Contains Any PLACE 
+List of Flowsheet Values (Orientation, 24) Contains Any TIME ) _695151Patient Score Rules - LAPS2 SOURCE Neuro Orientation APPROPRIATE 24HR  1211148APPROPRIATE FOR AGE IF FLO_MEAS_ID='1211148' THEN DO;
+   
+   APPROPRIATE=0;
+
+   IF INDEX(VARIABLEVALUE,"APPROPRIATE FOR AGE")>0 THEN APPROPRIATE=1;
+
+   IF APPROPRIATE=1 THEN _695151=1;
+
+END;1 and RESULT - if list of Flowsheet Values (Orientation, 24) Contains Any APPROPRIATE FOR AGE _695153Patient Score Rules - LAPS2 SOURCE Neuro Orientation CONFUSED 24HR1211148CONFUSED IF FLO_MEAS_ID='1211148' THEN DO;
+
+   CONFUSED2=0;
+
+   IF INDEX(VARIABLEVALUE,"CONFUSED")>0 THEN CONFUSED2=1;
+
+   IF CONFUSED2=1 THEN _695153=1;
+
+END;1 and RESULT - if ist of Flowsheet Values (Orientation, 24) Contains Any CONFUSED _695154Patient Score Rules- LAPS2 SOURCE Neuro Orientation CONSISTENT 24HR1211148CONSISTENT WITH PRE IF FLO_MEAS_ID='1211148' THEN DO;
+
+   CONSISTENT=0;
+
+   IF INDEX(VARIABLEVALUE,"CONSISTENT WITH PRE")>0 THEN CONSISTENT=1;
+
+   IF CONSISTENT=1 THEN _695154=1;
+
+END;1 and RESULT - if ist of Flowsheet Values (Orientation, 24) Contains Any CONSISTENT WITH PRE _695155Patient Score Rules - LAPS2 SOURCE Neuro Orientation REORIENTS 24HR1211148REORIENTS EASILY IF FLO_MEAS_ID='1211148' THEN DO;
+
+   REORIENTS=0;
+
+   IF INDEX(VARIABLEVALUE,"REORIENTS EASILY")>0 THEN REORIENTS=1;
+
+   IF REORIENTS=1 THEN _695155=1;
+
+END;1 and RESULT - if ist of Flowsheet Values (Orientation, 24) Contains Any REORIENTS EASILY _695156Patient Score Rules - LAPS2 SOURCE Neuro Orientation UNABLE 24HR1211148UNABLE TO ASSESS 
+IF FLO_MEAS_ID='1211148' THEN DO;
+
+   UNABLE1=0;
+
+   IF INDEX(VARIABLEVALUE,"UNABLE TO ASSESS")>0 THEN UNABLE1=1;
+
+   IF UNABLE1=1 THEN _695156=1;
+
+END;1 and RESULT - if ist of Flowsheet Values (Orientation, 24) Contains Any UNABLE TO ASSESS _695157Patient - LAPS2 Neuro Orientation 24HR EVAL 11211148EVENT+PERSON+PLACE+TIME
+APPROPRIATE
+CONFUSED IF FLO_MEAS_ID='1211148' THEN DO;
+
+   IF (_694663>=2 OR _695151) AND NOT _695153 THEN _695157=1;
+
+END;1  - if (LAPS2 SOURCE Neuro Orientation EVENT+PERSON+PLACE+TIME 24HR >= 2 Custom not 3 and (1 or 2)  
+          OR LAPS2 SOURCE Neuro Orientation APPROPRIATE 24HR > 0
+          ) 
+          AND NOT  LAPS2 SOURCE Neuro Orientation CONFUSED 24HR > 0          _695158Patient - LAPS2 Neuro Orientation 24HR EVAL 21211148EVENT+PERSON+PLACE+TIME
+CONFUSED
+CONSISTENT
+EVAL IF FLO_MEAS_ID='1211148' THEN DO;
+
+   IF (.<_694663<2 AND _695153 = 0 AND _695154 = 0) OR (_695154 AND _695157 NE 1) THEN _695158=1;
+
+END;1  - if (LAPS2 SOURCE Neuro Orientation EVENT+PERSON+PLACE+TIME 24HR >= 2 Custom (not 1 and not 2 and not 3) or (3 and not 4)  
+         AND LAPS2 SOURCE Neuro Orientation CONFUSED 24HR = 0
+         AND LAPS2 SOURCE Neuro Orientation CONSISTENT 24HR = 0
+          ) 
+          OR (LAPS2 SOURCE Neuro Orientation CONSISTENT 24HR > 0
+                  AND LAPS2 Neuro Orientation 24HR EVAL 1 <> 1
+         )          _695159Patient Score Rules -LAPS2 Neuro Orientation 24HR EVAL FINAL 1211148 _695153
+_695158
+_695157
+_695154
+_695156IF FLO_MEAS_ID='1211148' THEN DO;   
+                                    
+   IF _695153>0 THEN _695159=3;     
+   ELSE IF _695158 THEN _695159=2;  
+   ELSE IF _695157 THEN _695159=1;  
+   ELSE IF _695154 THEN _695159=1;  
+   ELSE IF _695156 THEN _695159=2;  
+                                    
+END;                                3 OR RESULT - if LAPS2 SOURCE Neuro Orientation CONFUSED 24HR > 0 
+2 - else if LAPS2 Neuro Orientation 24HR EVAL 2 == TRUE                  
+1-  else if LAPS2 Neuro Orientation 24HR EVAL 1 == TRUE                  
+1 -  else if LAPS2 SOURCE Neuro Orientation REORIENTS 24HR > 0
+2 -  else if LAPS2 SOURCE Neuro Orientation UNABLE 24HR > 0          _695171Patient Score Rules - LAPS2 Neuro Score Calculation MAX 24HR  _694660
+_695170
+_694662
+_695159
+_694664
+_694665
+_694666      _695171=MAX(_694660,_695170,_694662,_695159,_694664,_694665,_694666);        MAX of  
+(LAPS2 SOURCE Neuro Glasgow Score 24HR <> NULL Property/Rule Value AND max(s1,s2,s3,s4,s5,s6,s7) 
+LAPS2 Neuro Consciousness 24HR EVAL FINAL <> NULL Propert y/Rule Value                   
+LAPS2 SOURCE Neuro Mental Status 24HR <> NULL Property/Rule Value                           
+LAPS2 Neuro Orientation 24HR EVAL FINAL <> NULL Property/Rule Value                           
+LAPS2 SOURCE Neuro Pupils 24HR <> NULL Property/Rule Value                                   
+LAPS2 SOURCE Neuro Schmidt Fall Risk 24HR <> NULL Propert y/Rule Value                   
+LAPS2 SOURCE Neuro Speech 24HR <> NULL Property/Rule Value) EVALUE
+ETYPE_CD Final NEURO Calculation based on score name _695171   PROC SUMMARY DATA=NEURO2 NWAY;
+   VAR _695171;
+   CLASS MRN10_NB EDIP_TS1; 
+   OUTPUT OUT=ONE_ROW_EPIC_NEURO MAX=_695171;
+RUN
+
+DATA FOR_LAPS2;
+   SET ONE_ROW_EPIC_NEURO2 (IN=NEURO KEEP=PAT_ENC_CSN_ID _695171 EDIP_TS1)
+       ALL_LABS0
+       VITALS2;
+   IF NEURO THEN DO;
+      ETYPE_CD='NEURO';
+      EVALUE=_695171;
+...."EVALUE = MAX(_695171) per MRN
+ETYPE_CD ='NEURO'"
+
+
+
+
+
+
+
+
+LAPS2 Score Calculation (back):
+
+INPUT VariablesVariable descriptionPre LAPS Variable Mapping logic
+(per PAT_ENC_CSN_ID, LAPS2_TS)Value select logic
+(per PAT_ENC_CSN_ID, LAPS2_TS)LOGIT_P Calculation
+(default set up:  LOGIT_P = -4.31678)PRELAPS2 Calulation 
+based on the sum of LOGIT_PFinal LAPS2 Calculation 
+LAPS2 = sum of all individual LAPS2 in each input variablesBUNInput from input dataset MAX  IF BUN=. THEN LAPS2=LAPS2+0;
+ELSE IF BUN<18 THEN LAPS2=LAPS2+0;
+ELSE IF BUN<20 THEN LAPS2=LAPS2+11;
+ELSE IF BUN<40 THEN LAPS2=LAPS2+12;
+ELSE IF BUN<80 THEN LAPS2=LAPS2+20;
+ELSE IF BUN>=80 THEN LAPS2=LAPS2+25;CREAT MAX  IF CREAT=. THEN LAPS2=LAPS2+0;
+ELSE IF CREAT<1 THEN LAPS2=LAPS2+0;
+ELSE IF CREAT<2 THEN LAPS2=LAPS2+6;
+ELSE IF CREAT<4 THEN LAPS2=LAPS2+11;
+ELSE IF CREAT>=4 THEN LAPS2=LAPS2+5;SODIUM MIN  IF SODIUM=. THEN LAPS2=LAPS2+0;
+ELSE IF SODIUM<129 THEN LAPS2=LAPS2+14;
+ELSE IF SODIUM<135 THEN LAPS2=LAPS2+7;
+ELSE IF SODIUM<146 THEN LAPS2=LAPS2+0;
+ELSE IF SODIUM>=146 THEN LAPS2=LAPS2+4;BICARB     ANIONGAP     BILI MAX  IF BILI=. THEN LAPS2=LAPS2+0;
+ELSE IF BILI<2 THEN LAPS2=LAPS2+0;
+ELSE IF BILI<3 THEN LAPS2=LAPS2+11;
+ELSE IF BILI<5 THEN LAPS2=LAPS2+18;
+ELSE IF BILI<8 THEN LAPS2=LAPS2+25;
+ELSE IF BILI>=8 THEN LAPS2=LAPS2+41;PH MIN  IF PH=. AND LACT=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+0;
+ELSE IF PH=. AND LACT=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+15;
+
+ELSE IF PH=. AND LACT<2 AND PRELAPS2<0.06 THEN LAPS2=LAPS2+0;
+ELSE IF PH=. AND LACT<2 AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+12;
+
+ELSE IF PH=. AND LACT<4 AND PRELAPS2<0.06 THEN LAPS2=LAPS2+12;
+ELSE IF PH=. AND LACT<4 AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+15;
+
+ELSE IF PH=. AND LACT>=4 AND PRELAPS2<0.06 THEN LAPS2=LAPS2+26;
+ELSE IF PH=. AND LACT>=4 AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+30;
+
+ELSE IF PH<7.20 AND LACT=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+13;
+ELSE IF PH<7.20 AND LACT=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+19;
+
+ELSE IF PH<7.35 AND LACT=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+5;
+ELSE IF PH<7.35 AND LACT=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+15;
+
+ELSE IF PH<7.45 AND LACT=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+0;
+ELSE IF PH<7.45 AND LACT=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+12;
+
+ELSE IF PH>=7.45 AND LACT=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+12;
+ELSE IF PH>=7.45 AND LACT=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+15;
+
+ELSE IF PH<7.20 AND LACT<2 THEN LAPS2=LAPS2+13;
+ELSE IF PH<7.20 AND LACT<4 THEN LAPS2=LAPS2+19;
+ELSE IF PH<7.20 AND LACT>=4 THEN LAPS2=LAPS2+34;
+
+ELSE IF PH<7.35 AND LACT<2 THEN LAPS2=LAPS2+5;
+ELSE IF PH<7.35 AND LACT<4 THEN LAPS2=LAPS2+15;
+ELSE IF PH<7.35 AND LACT>=4 THEN LAPS2=LAPS2+25;
+
+ELSE IF PH<7.45 AND LACT<2 THEN LAPS2=LAPS2+0;
+ELSE IF PH<7.45 AND LACT<4 THEN LAPS2=LAPS2+12;
+ELSE IF PH<7.45 AND LACT>=4 THEN LAPS2=LAPS2+26;
+
+ELSE IF PH>=7.45 AND LACT<2 THEN LAPS2=LAPS2+12;
+ELSE IF PH>=7.45 AND LACT<4 THEN LAPS2=LAPS2+15;
+ELSE IF PH>=7.45 AND LACT>=4 THEN LAPS2=LAPS2+30;LACT MAX  ALBUMIN MIN  IF ALBUMIN=. THEN LAPS2=LAPS2+0;
+ELSE IF ALBUMIN<2 THEN LAPS2=LAPS2+31;
+ELSE IF ALBUMIN<2.5 THEN LAPS2=LAPS2+15;
+ELSE IF ALBUMIN>=2.5 THEN LAPS2=LAPS2+0;GLUCOSE MIN  IF GLUCOSE=. THEN LAPS2=LAPS2+0;
+ELSE IF GLUCOSE<40 THEN LAPS2=LAPS2+10;
+ELSE IF GLUCOSE<60 THEN LAPS2=LAPS2+10;
+ELSE IF GLUCOSE<200 THEN LAPS2=LAPS2+0;
+ELSE IF GLUCOSE>=200 THEN LAPS2=LAPS2+3;HEMAT MAX  IF HEMAT=. THEN LAPS2=LAPS2+0;
+ELSE IF HEMAT<20 THEN LAPS2=LAPS2+7;
+ELSE IF HEMAT<40 THEN LAPS2=LAPS2+8;
+ELSE IF HEMAT<50 THEN LAPS2=LAPS2+0;
+ELSE IF HEMAT>=50 THEN LAPS2=LAPS2+3;WBC MIN  IF WBC=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+0;
+ELSE IF WBC=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+32;
+ELSE IF WBC<5 THEN LAPS2=LAPS2+8;
+ELSE IF WBC<13 THEN LAPS2=LAPS2+0;
+ELSE IF WBC>=13 THEN LAPS2=LAPS2+11;PACO2 MAX  IF PACO2=. THEN LAPS2=LAPS2+0;
+ELSE IF PACO2<35 THEN LAPS2=LAPS2+7;
+ELSE IF PACO2<45 THEN LAPS2=LAPS2+0;
+ELSE IF PACO2<55 THEN LAPS2=LAPS2+11;
+ELSE IF PACO2<65 THEN LAPS2=LAPS2+13;
+ELSE IF PACO2>=65 THEN LAPS2=LAPS2+12;PAO2 MAX  IF PAO2=. THEN LAPS2=LAPS2+0;
+ELSE IF PAO2<50 THEN LAPS2=LAPS2+8;
+ELSE IF PAO2<120 THEN LAPS2=LAPS2+0;
+ELSE IF PAO2>=120 THEN LAPS2=LAPS2+12;TROP MAX  IF TROP=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+0;
+ELSE IF TROP=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+9;
+ELSE IF TROP<0.01 THEN LAPS2=LAPS2+0;
+ELSE IF TROP<0.20 THEN LAPS2=LAPS2+8;
+ELSE IF TROP<1.00 THEN LAPS2=LAPS2+17;
+ELSE IF TROP<3.00 THEN LAPS2=LAPS2+19;
+ELSE IF TROP>=3.00 THEN LAPS2=LAPS2+25;TEMP MIN  IF TEMP=. THEN LAPS2=LAPS2+0;
+ELSE IF TEMP<85 THEN LAPS2=LAPS2+0;
+ELSE IF TEMP<96 THEN LAPS2=LAPS2+20;
+ELSE IF TEMP<100.5 THEN LAPS2=LAPS2+0;
+ELSE IF TEMP<=108 THEN LAPS2=LAPS2+3;
+ELSE IF TEMP=108 THEN LAPS2=LAPS2+3;
+ELSE IF TEMP>108 THEN LAPS2=LAPS2+0;
+else LAPS2=LAPS2+0;HRTRT MAX  IF HRTRT=. THEN LAPS2=LAPS2+0;
+ELSE IF HRTRT<60 THEN LAPS2=LAPS2+7;
+ELSE IF HRTRT<110 THEN LAPS2=LAPS2+0;
+ELSE IF HRTRT<140 THEN LAPS2=LAPS2+7;
+ELSE IF HRTRT<300 THEN LAPS2=LAPS2+10;
+ELSE IF HRTRT=300 THEN LAPS2=LAPS2+10;
+ELSE IF HRTRT>300 THEN LAPS2=LAPS2+0;
+else LAPS2=LAPS2+0;BPSYS MIN  IF BPSYS=. THEN LAPS2=LAPS2+0;
+ELSE IF BPSYS<75 THEN LAPS2=LAPS2+22;
+ELSE IF BPSYS<90 THEN LAPS2=LAPS2+13;
+ELSE IF BPSYS<120 THEN LAPS2=LAPS2+5;
+ELSE IF BPSYS<140 THEN LAPS2=LAPS2+0;
+ELSE IF BPSYS<160 THEN LAPS2=LAPS2+8;
+ELSE IF BPSYS<300 THEN LAPS2=LAPS2+14;
+ELSE IF BPSYS=300 THEN LAPS2=LAPS2+14;
+ELSE IF BPSYS>300 THEN LAPS2=LAPS2+5;
+else LAPS2=LAPS2+0;O2SAT MIN  IF O2SAT=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+0;
+ELSE IF O2SAT=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+22;
+ELSE IF O2SAT<50 THEN LAPS2=LAPS2+0;
+
+ELSE IF O2SAT<90 THEN LAPS2=LAPS2+22;
+ELSE IF O2SAT<94 THEN LAPS2=LAPS2+12;
+ELSE IF O2SAT>=94 THEN LAPS2=LAPS2+0;NEURO MAX  IF NEURO=. AND PRELAPS2<0.06 THEN LAPS2=LAPS2+16;
+ELSE IF NEURO=. AND PRELAPS2>=0.06 THEN LAPS2=LAPS2+21;
+ELSE IF NEURO=1 THEN LAPS2=LAPS2+0;
+ELSE IF NEURO=2 THEN LAPS2=LAPS2+16;
+ELSE IF NEURO=3 THEN LAPS2=LAPS2+21;
+ELSE IF NEURO=4 THEN LAPS2=LAPS2+36;RESP MAX  IF RESP=. THEN LAPS2=LAPS2+0;
+ELSE IF RESP<20 THEN LAPS2=LAPS2+0;
+ELSE IF RESP<30 THEN LAPS2=LAPS2+11;
+ELSE IF RESP<80 THEN LAPS2=LAPS2+21;
+ELSE IF RESP=80 THEN LAPS2=LAPS2+21;
+ELSE IF RESP>80 THEN LAPS2=LAPS2+0;
+else LAPS2=LAPS2+0;SHOCKPre Laps2 VariableMAX(HRTRT) /MIN(BPSYS)   IF SHOCK=. THEN LAPS2=LAPS2+0;
+ELSE IF SHOCK<0.65 THEN LAPS2=LAPS2+0;
+ELSE IF SHOCK<0.85 THEN LAPS2=LAPS2+8;
+ELSE IF SHOCK>=0.85 THEN LAPS2=LAPS2+17;BUNCREATMax(BUN)/MIN(CREAT)MAX  IF BUNCREAT=. THEN LAPS2=LAPS2+0;
+ELSE IF BUNCREAT<25 THEN LAPS2=LAPS2+0;
+ELSE IF BUNCREAT>=25 THEN LAPS2=LAPS2+10;PRE_BUNCREATMax(BUN)/MIN(CREAT) IF PRE_BUNCREAT=. THEN LOGIT_P=LOGIT_P-0.44381;
+ELSE IF PRE_BUNCREAT<8 THEN LOGIT_P=LOGIT_P+0.26988;
+ELSE IF PRE_BUNCREAT<16 THEN LOGIT_P=LOGIT_P-0.44381;
+ELSE IF PRE_BUNCREAT<24 THEN LOGIT_P=LOGIT_P-0.22465;
+ELSE LOGIT_P=LOGIT_P+0.39858;PRELAPS2 based on sum of all LOGIT_P value. 
+PRELAPS2=1/(1+EXP(-1*LOGIT_P)); PRE_SODIUMLast no missing SODIUM value  IF PRE_SODIUM=. THEN LOGIT_P=LOGIT_P-0.73087;
+ELSE IF PRE_SODIUM<129 THEN LOGIT_P=LOGIT_P+0.11980;
+ELSE IF PRE_SODIUM<132 THEN LOGIT_P=LOGIT_P-0.06801;
+ELSE IF PRE_SODIUM<135 THEN LOGIT_P=LOGIT_P-0.30494;
+ELSE IF PRE_SODIUM<146 THEN LOGIT_P=LOGIT_P-0.73087;
+ELSE IF PRE_SODIUM<149 THEN LOGIT_P=LOGIT_P-0.02560;
+ELSE IF PRE_SODIUM<155 THEN LOGIT_P=LOGIT_P+0.42071;
+ELSE LOGIT_P=LOGIT_P+0.58891; PRE_PMLMAX(ANIONGAP) /MIN(BICARB) *1000 IF PRE_PML=. THEN LOGIT_P=LOGIT_P-0.39015;
+ELSE IF PRE_PML<200 THEN LOGIT_P=LOGIT_P-0.20038;
+ELSE IF PRE_PML<400 THEN LOGIT_P=LOGIT_P-0.39015;
+ELSE IF PRE_PML<600 THEN LOGIT_P=LOGIT_P-0.11174;
+ELSE LOGIT_P=LOGIT_P+0.70227; AGEInput from input dataset  IF AGE<40 THEN LOGIT_P=LOGIT_P-1.37133;
+ELSE IF AGE<65 THEN LOGIT_P=LOGIT_P-0.25234;
+ELSE IF AGE<75 THEN LOGIT_P=LOGIT_P+0.25894;
+ELSE IF AGE<85 THEN LOGIT_P=LOGIT_P+0.48826;
+ELSE LOGIT_P=LOGIT_P+0.87647 MALE  IF MALE=1 THEN LOGIT_P=LOGIT_P+0.27430; ED  IF ED=1 THEN LOGIT_P=LOGIT_P+1.39670; 
+
+
+
+
+
+
+Glossary:
+ED: Emergency Department/unit in hospital.
+
+EDIP: Early Determination of Impending Physiological derangement
+
+HET: Hospital Entry Time
+
+LAPS2: Laboratory-based Acute Physiologic Score Measure Version 2
+LAPS2 uses information available 72 hours before patients’ physical entry into their first hospital unit (ward, ICU, intermediate care areas, or operating room). 
+LAPS2 includes lactate and vital signs
+Temperature, heart rate, respiratory rate, blood pressure, oximetry, and neurological status checks
+Available in IDR for NCA
+
+
+
+
+
+
+
+
+
+
+
+
+
